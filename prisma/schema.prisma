@@ -1,0 +1,62 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ClaimPayee {
+  id              Int     @id @default(autoincrement())
+  claimPayeeType  String?
+  claimPayeeName  String
+  claimPayeeCode  String?
+  legalEntityType String?
+  taxId           String? @unique
+
+  firstName String
+  lastName  String
+  phone     String
+  email     String?
+
+  paymentAccounts PaymentAccount[]
+  addresses       Address[]
+  notes           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PaymentAccount {
+  id            Int      @id @default(autoincrement())
+  accountName   String   @unique
+  accountNumber String
+  accountType   String?
+  paymentMethod String
+  email         String?
+  createdAt     DateTime @default(now())
+
+  claimPayeeId Int
+  claimPayee   ClaimPayee @relation(fields: [claimPayeeId], references: [id])
+}
+
+model Address {
+  id         Int    @id @default(autoincrement())
+  type       String
+  street     String
+  city       String
+  state      String
+  postalCode String
+  country    String @default("United States")
+
+  claimPayeeId Int
+  claimPayee   ClaimPayee @relation(fields: [claimPayeeId], references: [id])
+}
