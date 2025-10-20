@@ -98,6 +98,8 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 
 ## What i have in my project
-###CRUD
-- This project include CRUD with nestjs and prisma.
-###Exception filter
+### CRUD
+- This project include CRUD with nestjs and prisma. [For more information](https://www.prisma.io/docs/orm/prisma-client/queries/crud)
+- This is demo how i create CRUD. Business logic in this project could be not reasonable but you can change it.
+- I simply create a database, connect and export it to the CRUD. Create dto for validate information.
+- Moreover i create exception filter for handle error which will appear in pipeline.
