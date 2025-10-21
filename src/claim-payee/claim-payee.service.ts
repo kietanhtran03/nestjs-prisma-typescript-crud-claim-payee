@@ -9,7 +9,7 @@ export class ClaimPayeeService {
 
   async create(createClaimPayeeDto: CreateClaimPayeeDto) {
     const { paymentAccounts, addresses, ...rest } = createClaimPayeeDto;
-
+    
     return this.databaseService.claimPayee.create({
       data: {
         ...rest,
@@ -76,7 +76,7 @@ export class ClaimPayeeService {
           });
         }
       }
-      return updated
+      return updated;
     });
   }
 

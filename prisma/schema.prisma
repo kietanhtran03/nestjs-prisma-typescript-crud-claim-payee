@@ -18,45 +18,258 @@ model ClaimPayee {
   id              Int     @id @default(autoincrement())
   claimPayeeType  String?
   claimPayeeName  String
-  claimPayeeCode  String?
+  claimPayeeCode  String? @unique
   legalEntityType String?
   taxId           String? @unique
 
+  // Contact Person
   firstName String
   lastName  String
   phone     String
   email     String?
 
+  // Relations
   paymentAccounts PaymentAccount[]
   addresses       Address[]
-  notes           String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  
+  // Notes
+  notes           String?  @db.Text
+  
+  // Audit Fields
+  createdBy     Int
+  createdByUser User @relation("CreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  
+  updatedBy     Int
+  updatedByUser User @relation("UpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict)
+  
+  // Soft Delete
+  isDeleted     Boolean  @default(false)
+  deletedAt     DateTime?
+  deletedBy     Int?
+  deletedByUser User? @relation("DeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([claimPayeeName])
+  @@index([taxId])
+  @@index([isDeleted])
+  @@index([createdBy])
+  @@map("claim_payees")
 }
 
 model PaymentAccount {
   id            Int      @id @default(autoincrement())
-  accountName   String   @unique
+  accountName   String   
   accountNumber String
-  accountType   String?
-  paymentMethod String
+  accountType   String?  // checking, savings, etc.
+  paymentMethod String   // ACH, Wire, Check, etc.
+  
+  // Additional Info
+  bankName      String?
+  routingNumber String?
+  swiftCode     String?
   email         String?
+  
+  // Status
+  isActive      Boolean  @default(true)
+  isPrimary     Boolean  @default(false) // One primary per payee
+  
+  // Audit
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
+  // Relations
   claimPayeeId Int
-  claimPayee   ClaimPayee @relation(fields: [claimPayeeId], references: [id])
+  claimPayee   ClaimPayee @relation(fields: [claimPayeeId], references: [id], onDelete: Cascade)
+  
+  @@unique([claimPayeeId, accountName])
+  @@index([claimPayeeId])
+  @@map("payment_accounts")
 }
 
 model Address {
   id         Int    @id @default(autoincrement())
-  type       String
+  type       String // billing, shipping, mailing
+  
+  // Address Fields
   street     String
+  street2    String? // Apartment, suite, etc.
   city       String
   state      String
   postalCode String
   country    String @default("United States")
+  
+  // Geolocation (Optional)
+  latitude   Float?
+  longitude  Float?
+  
+  // Status
+  isPrimary  Boolean @default(false)
+  isActive   Boolean @default(true)
+  
+  // Audit
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
+  // Relations
   claimPayeeId Int
-  claimPayee   ClaimPayee @relation(fields: [claimPayeeId], references: [id])
+  claimPayee   ClaimPayee @relation(fields: [claimPayeeId], references: [id], onDelete: Cascade)
+  
+  @@index([claimPayeeId])
+  @@index([city, state])
+  @@map("addresses")
+}
+
+model User {
+  id              Int       @id @default(autoincrement())
+  username        String    @unique
+  email           String    @unique
+  password        String    // Hash with bcrypt (min 10 rounds)
+  fullName        String?
+  role            Role      @default(USER)
+  isActive        Boolean   @default(true)
+  
+  // Email Verification
+  emailVerified   Boolean   @default(false)
+  emailVerifiedAt DateTime?
+  verificationToken String? @unique
+  
+  // Security
+  lastLoginAt     DateTime?
+  passwordChangedAt DateTime?
+  failedLoginAttempts Int   @default(0)
+  lockedUntil     DateTime?
+  
+  // Two-Factor Authentication (Optional but recommended)
+  twoFactorSecret String?
+  twoFactorEnabled Boolean  @default(false)
+  twoFactorBackupCodes Json? // Array of backup codes
+  
+  // Password Reset
+  resetPasswordToken String?   @unique
+  resetPasswordExpires DateTime?
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  sessions        Session[]
+  auditLogs       AuditLog[]
+  claimPayeesCreated ClaimPayee[] @relation("CreatedBy")
+  claimPayeesUpdated ClaimPayee[] @relation("UpdatedBy")
+  claimPayeesDeleted ClaimPayee[] @relation("DeletedBy")
+
+  @@index([email])
+  @@index([username])
+  @@map("users")
+}
+
+model Session {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Token Management
+  refreshToken String    @unique
+  accessToken  String?   // Optional: store for blacklisting
+  
+  // Session Metadata
+  ipAddress    String?
+  userAgent    String?
+  deviceInfo   Json?     // {browser, os, device}
+  location     String?   // City, Country
+  
+  // Status
+  isRevoked    Boolean   @default(false)
+  revokedAt    DateTime?
+  revokedReason String?  // manual_logout, suspicious_activity, expired
+  
+  // Timestamps
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  lastUsedAt   DateTime  @default(now())
+  
+  @@index([userId, isRevoked])
+  @@index([refreshToken])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+enum Role {
+  SUPER_ADMIN  // Full system access
+  ADMIN        // User management + full CRUD
+  MANAGER      // Full CRUD on business entities
+  USER         // Limited CRUD
+  VIEWER       // Read-only access
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  
+  // User Info
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  username    String?  // Backup if user deleted
+  
+  // Action Details
+  action      AuditAction
+  entity      String   // ClaimPayee, User, PaymentAccount, etc.
+  entityId    Int?
+  
+  // Change Tracking
+  oldValue    Json?    // Previous state
+  newValue    Json?    // New state
+  changes     Json?    // Specific fields changed: {field: {old, new}}
+  
+  // Request Metadata
+  ipAddress   String?
+  userAgent   String?
+  method      String?  // GET, POST, PUT, DELETE
+  endpoint    String?  // /api/claim-payee/123
+  statusCode  Int?     // 200, 404, 500, etc.
+  
+  // Additional Context
+  description String?  @db.Text
+  metadata    Json?    // Any additional data
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  // Auth Actions
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  PASSWORD_RESET
+  PASSWORD_CHANGED
+  EMAIL_VERIFIED
+  TWO_FACTOR_ENABLED
+  TWO_FACTOR_DISABLED
+  
+  // CRUD Actions
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  RESTORE // For soft delete restore
+  
+  // Bulk Actions
+  BULK_CREATE
+  BULK_UPDATE
+  BULK_DELETE
+  
+  // Special Actions
+  EXPORT
+  IMPORT
+  ARCHIVE
+  UNARCHIVE
 }
