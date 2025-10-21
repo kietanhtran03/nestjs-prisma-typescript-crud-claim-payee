@@ -7,5 +7,6 @@ import { DatabaseModule } from 'src/database/database.module';
   imports: [DatabaseModule],
   controllers: [ClaimPayeeController],
   providers: [ClaimPayeeService],
+  exports: [ClaimPayeeService]
 })
 export class ClaimPayeeModule {}
